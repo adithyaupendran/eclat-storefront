@@ -9,11 +9,12 @@
 
 ## ✨ Features
 
-- **Editorial Design System**: A bespoke monochromatic UI inspired by high-fashion magazines. Features fluid typography (Noto Serif & Inter) and subtle glassmorphism.
-- **Dynamic Product Interactions**: Intelligent hover states, auto-scrolling image carousels, and dwell-time tracking.
-- **Gemini-Powered AI Search**: Semantic search capabilities allowing users to find pieces using natural language and conceptual tags.
-- **Full Admin Dashboard**: Comprehensive internal tooling for managing products, inventory, sizes, and editorial content.
-- **Supabase Integration**: Secure authentication, real-time database management, and edge storage for product imagery.
+- **Generative AI Storefront**: A dynamic, context-aware shopping experience powered by Google Gemini. The storefront intuitively adapts to user behavior, rendering intelligent product recommendations, conceptual tags, and curated editorial collections on the fly.
+- **Natural Language & Semantic Search**: An ultra-smart search bar that goes beyond exact keyword matches. Users can search by vibe, occasion, or aesthetic (e.g., "monochrome winter coats" or "minimalist evening wear") to discover pieces perfectly aligned with their intent.
+- **Editorial Design System**: A bespoke monochromatic UI inspired by high-fashion magazines. Features fluid typography (Noto Serif & Inter) and subtle glassmorphism to let the imagery take center stage.
+- **Dynamic Product Interactions**: Intelligent hover states, auto-scrolling image carousels, and dwell-time tracking that feeds into the behavioral context engine.
+- **Full Admin Dashboard**: Comprehensive internal tooling for managing products, inventory, sizes, and orchestrating editorial content.
+- **Supabase Integration**: Secure authentication, real-time database management, and edge storage for high-resolution product imagery.
 - **Optimized Cart Experience**: Slide-out cart with real-time stock validation and smooth quantity controls.
 - **Responsive Architecture**: Flawless layout transitions from mobile to ultra-wide desktop displays.
 
