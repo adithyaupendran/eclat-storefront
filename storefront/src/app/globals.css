@@ -1,0 +1,218 @@
+@import "tailwindcss";
+
+/* ─── Hide scrollbars globally ────────────────────────────────────────────── */
+* {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE/Edge */
+}
+*::-webkit-scrollbar {
+  display: none;                /* Chrome/Safari/Opera */
+}
+
+/* ─── ÉCLAT Design Tokens ─────────────────────────────────────────────────── */
+:root {
+  --eclat-black:       #000000;
+  --eclat-on-black:    #e2e2e2;
+  --eclat-surface:     #f9f9f9;
+  --eclat-surface-low: #f3f3f3;
+  --eclat-white:       #ffffff;
+  --eclat-on-surface:  #1b1b1b;
+  --eclat-variant:     #474747;
+  --eclat-container:   #eeeeee;
+  --eclat-outline:     rgba(119, 119, 119, 0.15);
+  --eclat-dim:         #dadada;
+
+  /* Editorial spacing scale */
+  --space-section: 8.5rem;   /* 24-token: between major sections */
+  --space-block:   4rem;     /* 12-token: between list items     */
+}
+
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-noto-serif);
+}
+
+/* ─── Global reset ────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  border-radius: 0 !important; /* ÉCLAT: strictly 0px radius everywhere */
+}
+
+html, body {
+  background-color: var(--eclat-surface);
+  color: var(--eclat-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Typography helpers ──────────────────────────────────────────────────── */
+.eclat-display {
+  font-family: var(--font-noto-serif), 'Noto Serif', Georgia, serif;
+  font-size: 3.5rem;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.eclat-headline {
+  font-family: var(--font-noto-serif), 'Noto Serif', Georgia, serif;
+  font-size: 2rem;
+  line-height: 1.2;
+  font-weight: 400;
+}
+.eclat-title {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.eclat-body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--eclat-variant);
+}
+.eclat-label {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--eclat-variant);
+}
+
+/* ─── Button variants ─────────────────────────────────────────────────────── */
+.eclat-btn-primary {
+  display: inline-block;
+  background: var(--eclat-black);
+  color: var(--eclat-on-black);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 0.6875rem;
+  letter-spacing: 0.15rem;
+  text-transform: uppercase;
+  padding: 1rem 2rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.eclat-btn-primary:hover {
+  background: linear-gradient(135deg, var(--eclat-black) 0%, #3b3b3b 100%);
+}
+.eclat-btn-secondary {
+  display: inline-block;
+  background: transparent;
+  color: var(--eclat-black);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 0.6875rem;
+  letter-spacing: 0.15rem;
+  text-transform: uppercase;
+  padding: 1rem 2rem;
+  border: 1px solid rgba(119,119,119,0.3);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.eclat-btn-secondary:hover {
+  border-color: var(--eclat-black);
+}
+.eclat-btn-text {
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--eclat-black);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+/* ─── Glassmorphism nav ───────────────────────────────────────────────────── */
+.eclat-nav {
+  background: #eeeeee;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ─── Tonal surfaces ──────────────────────────────────────────────────────── */
+.eclat-surface          { background-color: var(--eclat-surface); }
+.eclat-surface-low      { background-color: var(--eclat-surface-low); }
+.eclat-surface-white    { background-color: var(--eclat-white); }
+.eclat-surface-dark     { background-color: var(--eclat-black); color: var(--eclat-on-black); }
+.eclat-surface-container { background-color: var(--eclat-container); }
+
+/* ─── Product image placeholder ───────────────────────────────────────────── */
+.eclat-img-outerwear {
+  background: linear-gradient(180deg, #e0ddd9 0%, #ccc8c2 50%, #b8b3ac 100%);
+}
+.eclat-img-separates {
+  background: linear-gradient(160deg, #ede9e4 0%, #d6d0c8 100%);
+}
+.eclat-img-footwear {
+  background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+}
+.eclat-img-accessories {
+  background: linear-gradient(160deg, #c4bdb5 0%, #a8a09a 60%, #c4bdb5 100%);
+}
+.eclat-img-sets {
+  background: linear-gradient(180deg, #e8e5e1 0%, #ccc8c2 100%);
+}
+.eclat-img-default {
+  background: var(--eclat-dim);
+}
+
+/* ─── Product recommendation fade transition ──────────────────────────────── */
+@keyframes eclatFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.eclat-fade-in {
+  animation: eclatFadeIn 0.5s ease both;
+}
+
+/* ─── Dwell state (subtle surface shift — no colour) ─────────────────────── */
+@keyframes eclatDwell {
+  from { background-color: var(--eclat-white); }
+  to   { background-color: var(--eclat-surface-low, #f3f3f3); }
+}
+.eclat-dwell {
+  background-color: var(--eclat-surface-low) !important;
+  outline: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ─── Nudge strip slide-in ─────────────────────────────────────────────────── */
+@keyframes eclatNudgeIn {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);      opacity: 1; }
+}
+.eclat-nudge-in { animation: eclatNudgeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ─── Shimmer skeleton ─────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #e8e8e8 25%, #f0f0f0 50%, #e8e8e8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* ─── Scroll reveal ────────────────────────────────────────────────────────── */
+@keyframes eclatReveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.eclat-reveal {
+  animation: eclatReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Price hesitation indicator (monochrome pulse) ──────────────────────── */
+@keyframes eclatPricePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+.eclat-price-hesitate {
+  animation: eclatPricePulse 1.5s ease-in-out infinite;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
