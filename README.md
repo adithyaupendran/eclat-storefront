@@ -6,6 +6,8 @@
 
 ---
 
+![ÉCLAT Storefront - The Winter Anthology](./storefront/public/screenshot.png)
+
 ##  Features
 
 - **Generative AI Storefront**: A dynamic, context-aware shopping experience powered by Google Gemini. The storefront intuitively adapts to user behavior, rendering intelligent product recommendations, conceptual tags, and curated editorial collections on the fly.
