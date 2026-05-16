@@ -1,6 +1,6 @@
 # 🪞 ÉCLAT Storefront
 
-![ÉCLAT Storefront](https://raw.githubusercontent.com/adithyaupendran/eclat-storefront/main/storefront/public/vercel.svg) 
+![ÉCLAT Storefront](https://eclat-storefront.vercel.app/) 
 *A highly curated, minimalist, and ultra-premium e-commerce experience.*
 
 ÉCLAT is a conceptual high-end fashion storefront built to deliver an immersive, magazine-like shopping experience. It prioritizes stunning visual aesthetics, micro-interactions, and a seamless checkout journey, paired with a robust administrative backend.
