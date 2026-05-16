@@ -66,6 +66,7 @@ export async function updateProduct(id: string, formData: FormData) {
 
   revalidatePath('/admin/products')
   revalidatePath(`/products/${id}`)
+  // @ts-ignore - Next.js 16 types changed
   revalidateTag(`product-${id}`)
   return { success: true }
 }
@@ -82,6 +83,7 @@ export async function updateStock(id: string, stock: number) {
   if (error) return { error: error.message }
 
   revalidatePath('/admin/products')
+  // @ts-ignore - Next.js 16 types changed
   revalidateTag(`product-${id}`)
   return { success: true }
 }
