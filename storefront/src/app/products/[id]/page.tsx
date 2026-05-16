@@ -33,9 +33,9 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
     <>
       <EclatNav />
       <main className="pt-14">
-        <div className="md:grid md:grid-cols-2 min-h-[75vh]">
+        <div className="flex flex-col md:grid md:grid-cols-2 min-h-[75vh]">
           {/* ── Image carousel (50% width) ─────────────────────── */}
-          <div className="relative overflow-hidden bg-[#f3f3f3]" style={{ minHeight: '55vh', maxHeight: '75vh' }}>
+          <div className="relative overflow-hidden bg-[#f3f3f3] w-full h-[55vh] md:h-auto" style={{ minHeight: '55vh', maxHeight: '75vh' }}>
             {images.length > 0 ? (
               <ProductImageCarousel images={images} alt={product.name} />
             ) : (
