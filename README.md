@@ -1,4 +1,4 @@
-#  ÉCLAT Storefront
+#  {ÉCLAT}(https://eclat-storefront.vercel.app/) Storefront
 
 *A highly curated, minimalist, and ultra-premium e-commerce experience.*
 
@@ -27,40 +27,6 @@
 - **Validation**: [Zod](https://zod.dev/)
 - **Deployment**: [Vercel](https://vercel.com)
 
-##  Getting Started
-
-### Prerequisites
-Make sure you have Node.js (v18+) and npm installed. You will also need a Supabase project and a Gemini API key.
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/adithyaupendran/eclat-storefront.git
-   cd eclat-storefront/storefront
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   Create a `.env.local` file in the `storefront` directory and add the following:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-   GEMINI_API_KEY=your_gemini_api_key
-   ```
-
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open the app**
-   Navigate to [ECLAT](https://eclat-storefront.vercel.app/) in your browser.
 
 ##  Project Structure
 
