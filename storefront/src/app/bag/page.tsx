@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { EclatNav } from '@/components/eclat/EclatNav'
 import { EclatFooter } from '@/components/eclat/EclatFooter'
@@ -11,8 +12,6 @@ async function getCartItems() {
   // Use admin client to read with service role for guest access
   const adminUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-  let query: any
 
   if (user) {
     const res = await fetch(
@@ -36,7 +35,7 @@ async function getCartItems() {
 export default async function BagPage() {
   const items = await getCartItems()
 
-  const total = items.reduce((sum: number, item: any) => {
+  const total = items.reduce((sum: number, item: { product?: { price?: number }, quantity: number }) => {
     return sum + (Number(item.product?.price ?? 0) * item.quantity)
   }, 0)
 
@@ -57,13 +56,13 @@ export default async function BagPage() {
               <p className="eclat-body text-center" style={{ color: 'var(--eclat-variant)', maxWidth: 320 }}>
                 Your bag is empty. Browse the collection and add pieces you love.
               </p>
-              <a href="/" className="eclat-btn-primary px-10 py-3">EXPLORE COLLECTION</a>
+              <Link href="/" className="eclat-btn-primary px-10 py-3">EXPLORE COLLECTION</Link>
             </div>
           ) : (
             <div className="grid md:grid-cols-3 gap-12">
               {/* Items list */}
               <div className="md:col-span-2 flex flex-col divide-y divide-[rgba(0,0,0,0.06)]">
-                {items.map((item: any) => {
+                {items.map((item: { id: string, size?: string, quantity: number, product?: { title: string, brand: string, price: number, image_urls: string[] } }) => {
                   const p = item.product
                   const imageUrl = p?.image_urls?.[0]
                   return (
