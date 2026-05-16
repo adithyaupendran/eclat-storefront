@@ -1,4 +1,4 @@
-#  [ÉCLAT](https://eclat-storefront.vercel.app/) Storefront
+#  [ÉCLAT Storefront](https://eclat-storefront.vercel.app/) 
 
 *A highly curated, minimalist, and ultra-premium e-commerce experience.*
 
