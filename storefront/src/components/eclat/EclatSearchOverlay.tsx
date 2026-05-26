@@ -45,6 +45,7 @@ export function EclatSearchOverlay({ onClose }: EclatSearchOverlayProps) {
   const [interpretedAs, setInterpretedAs] = useState<string>("");
   const [aiTags, setAiTags] = useState<string[]>([]);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [didYouMean, setDidYouMean] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const signals = useBehavioralSignals();
@@ -63,6 +64,7 @@ export function EclatSearchOverlay({ onClose }: EclatSearchOverlayProps) {
     setMode("loading");
     setAiTags([]);
     setUsedFallback(false);
+    setDidYouMean(null);
 
     let aiSucceeded = false;
 
@@ -78,6 +80,7 @@ export function EclatSearchOverlay({ onClose }: EclatSearchOverlayProps) {
         setResults(data.results ?? []);
         setInterpretedAs(data.interpretedAs ?? `Results for: "${q}"`);
         setAiTags(data.aiTags ?? []);
+        setDidYouMean(data.didYouMean ?? null);
 
         // Persist sizes
         if ((data.extractedSizes ?? []).length > 0) {
@@ -285,6 +288,57 @@ export function EclatSearchOverlay({ onClose }: EclatSearchOverlayProps) {
             >
               {interpretedAs}
             </p>
+
+            {/* Did You Mean chip */}
+            {didYouMean && (
+              <div
+                className="mb-6 flex items-center gap-3"
+                style={{
+                  fontFamily: "var(--font-inter)",
+                  fontSize: "0.8125rem",
+                }}
+              >
+                <span style={{ color: "var(--eclat-variant)" }}>Did you mean:</span>
+                <button
+                  id="did-you-mean-btn"
+                  onClick={() => {
+                    setQuery(didYouMean);
+                    setDidYouMean(null);
+                    runSearch(didYouMean);
+                  }}
+                  style={{
+                    fontFamily: "var(--font-inter)",
+                    fontSize: "0.8125rem",
+                    letterSpacing: "0.03em",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                    cursor: "pointer",
+                    color: "var(--eclat-on-surface)",
+                    fontStyle: "italic",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                  }}
+                >
+                  &ldquo;{didYouMean}&rdquo;
+                </button>
+                <button
+                  onClick={() => setDidYouMean(null)}
+                  style={{
+                    fontFamily: "var(--font-inter)",
+                    fontSize: "0.75rem",
+                    color: "var(--eclat-variant)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    opacity: 0.6,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             {results.length === 0 ? (
               <div className="py-16 text-center">

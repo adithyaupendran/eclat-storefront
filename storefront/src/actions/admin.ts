@@ -21,6 +21,20 @@ const ProductSchema = z.object({
   review_count: z.coerce.number().int().min(0).default(0),
 })
 
+async function triggerSync() {
+  const url = process.env.VECTOR_SEARCH_URL;
+  const secret = process.env.VECTOR_SEARCH_SECRET;
+  if (!url || !secret) return;
+
+  fetch(`${url}/reindex`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: 'supabase', secret }),
+  }).catch(err => {
+    console.error('[triggerSync] Error syncing vector search:', err);
+  });
+}
+
 export async function createProduct(formData: FormData) {
   await requireAdmin()
   const admin = await createAdminClient()
@@ -43,6 +57,7 @@ export async function createProduct(formData: FormData) {
 
   revalidatePath('/admin/products')
   revalidatePath('/')
+  triggerSync()
   return { success: true }
 }
 
@@ -68,6 +83,7 @@ export async function updateProduct(id: string, formData: FormData) {
   revalidatePath(`/products/${id}`)
   // @ts-ignore - Next.js 16 types changed
   revalidateTag(`product-${id}`)
+  triggerSync()
   return { success: true }
 }
 
@@ -85,6 +101,7 @@ export async function updateStock(id: string, stock: number) {
   revalidatePath('/admin/products')
   // @ts-ignore - Next.js 16 types changed
   revalidateTag(`product-${id}`)
+  triggerSync()
   return { success: true }
 }
 
@@ -98,5 +115,7 @@ export async function deleteProduct(id: string) {
 
   revalidatePath('/admin/products')
   revalidatePath('/')
+  triggerSync()
   return { success: true }
 }
+

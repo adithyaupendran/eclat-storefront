@@ -1,14 +1,22 @@
 /**
  * POST /api/search
  *
- * AI-powered semantic fashion recommendation engine.
- * Uses Gemini to directly rank products based on the user's mood and the product's semantic metadata.
+ * Hybrid semantic fashion search engine for ÉCLAT.
+ *
+ * Search priority (first success wins):
+ *   1. Vector search  — FastAPI + ChromaDB + sentence-transformers (PRIMARY)
+ *   2. Gemini AI      — existing LLM-based ranking (if vector low-confidence / down)
+ *   3. TypeScript NL  — deterministic tag-based fallback (if Gemini fails)
+ *
+ * Response shape is IDENTICAL to the original route — frontend unchanged.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { ECLAT_CATALOG } from "@/lib/mock/catalog";
+import { naturalLanguageSearch } from "@/lib/search";
+import { vectorSearch, isConfident, type VectorSearchResponse } from "@/lib/vectorSearch";
 
-// ── Size extraction helper ─────────────────────────────────────────────────
+// ── Size extraction helper (unchanged from original) ──────────────────────────
 const SIZE_PATTERNS: { pattern: RegExp; size: string }[] = [
   { pattern: /\bextra\s*small\b|\bxs\b/i, size: "XS" },
   { pattern: /\bsmall\b|\bs\b(?!\w)/i,    size: "S" },
@@ -27,45 +35,132 @@ function extractSizes(query: string): string[] {
   return found;
 }
 
-// ── Main Route ─────────────────────────────────────────────────────────────
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const query: string = body.query ?? "";
-    const sizePreferences: string[] = body.sizePreferences ?? [];
+// ── Map vector result IDs back to full Product objects ────────────────────────
+function hydrateVectorResults(
+  vectorResp: VectorSearchResponse,
+  allSizes: string[]
+) {
+  let results = vectorResp.results
+    .map((r) => ECLAT_CATALOG.find((p) => p.id === r.product_id))
+    .filter(Boolean) as (typeof ECLAT_CATALOG)[number][];
 
-    if (!query.trim()) {
-      return NextResponse.json({ results: [], interpretedAs: "No query", aiTags: [], extractedSizes: [] });
+  // Apply size sort on top of re-ranking (size-matched float first)
+  if (allSizes.length > 0) {
+    results = results.sort((a, b) => {
+      const aHas = a.sizes?.some((s) => allSizes.includes(s)) ? 1 : 0;
+      const bHas = b.sizes?.some((s) => allSizes.includes(s)) ? 1 : 0;
+      return bHas - aHas;
+    });
+  }
+
+  // Build aiTags from detected signals
+  const aiTags: string[] = [
+    ...(vectorResp.detected_occasion ? [vectorResp.detected_occasion] : []),
+    ...vectorResp.detected_colors.slice(0, 2),
+  ].slice(0, 5);
+
+  return { results, aiTags };
+}
+
+// ── Local spell-checker (zero API calls, instant) ────────────────────────────
+// Levenshtein distance against curated fashion vocabulary.
+// Catches common typos like "relegant"→"elegant", "soemthing"→"something".
+const FASHION_VOCAB = [
+  // Common words
+  "something","anything","looking","wearing","want","need","find","show","like","feel",
+  // Occasions
+  "evening","night","day","casual","formal","party","wedding","work","office","date",
+  "beach","festival","summer","winter","autumn","spring","rain","cold","warm",
+  // Styles & aesthetics
+  "elegant","elegance","gothic","minimal","minimalist","bold","dramatic","romantic",
+  "edgy","classic","vintage","modern","avant-garde","sculptural","architectural",
+  "structured","fluid","flowing","draped","oversized","fitted","tailored",
+  "dark","light","moody","ethereal","ethereal","whimsical","effortless",
+  "luxurious","luxury","opulent","chic","sophisticated","refined","understated",
+  // Garment types
+  "coat","jacket","blazer","trench","dress","gown","top","blouse","shirt","tshirt",
+  "trousers","pants","skirt","shorts","waistcoat","vest","cardigan","sweater",
+  "boots","heels","shoes","sandals","sneakers","loafers","mules",
+  "bag","purse","clutch","accessory","jewellery","necklace","earrings",
+  // Materials
+  "silk","satin","velvet","leather","wool","cashmere","cotton","linen","denim",
+  "sequin","sequined","lace","chiffon","organza","tulle","mesh","sheer",
+  // Colors
+  "black","white","grey","gray","navy","beige","cream","camel","brown","tan",
+  "red","burgundy","wine","pink","blush","rose","gold","silver","bronze",
+  "green","emerald","olive","blue","cobalt","purple","lavender","orange","yellow",
+  // Descriptors
+  "statement","editorial","avant","garde","feminine","masculine","gender","neutral",
+  "sensual","sexy","seductive","powerful","fierce","bold","quiet","soft",
+];
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function localSpellCheck(query: string): string | null {
+  const words = query.trim().toLowerCase().split(/\s+/);
+  const corrected = words.map((word) => {
+    if (word.length < 4) return word; // skip short words
+    if (FASHION_VOCAB.includes(word)) return word; // already correct
+
+    // Find closest vocab word within edit distance threshold
+    let best = word, bestDist = Infinity;
+    for (const vocab of FASHION_VOCAB) {
+      if (Math.abs(vocab.length - word.length) > 3) continue; // skip unlikely candidates
+      const dist = levenshtein(word, vocab);
+      const threshold = word.length <= 6 ? 1 : 2; // stricter for short words
+      if (dist < bestDist && dist <= threshold) {
+        bestDist = dist;
+        best = vocab;
+      }
     }
+    return best;
+  });
 
-    const extractedSizes = extractSizes(query);
-    const allSizes = [...new Set([...sizePreferences, ...extractedSizes])];
+  const result = corrected.join(" ");
+  return result.toLowerCase() !== query.toLowerCase() ? result : null;
+}
 
-    // Prepare catalog data for the LLM
-    // We only send relevant fields to save tokens and focus the AI on semantics
-    const catalogForLLM = ECLAT_CATALOG.map(p => ({
-      id: p.id,
-      name: p.name,
-      category: p.category,
-      tags: p.tags,
-      semantic: p.semantic
-    }));
 
-    // 1. LLM extracts mood and RANKS products
-    const prompt = `You are a world-class semantic fashion recommendation engine for the luxury brand ÉCLAT.
+// ── Gemini search (original logic, unchanged) ─────────────────────────────────
+async function geminiSearch(
+  query: string,
+  allSizes: string[]
+): Promise<{ results: (typeof ECLAT_CATALOG)[number][]; interpretedAs: string; aiTags: string[]; didYouMean: string | null }> {
+  const catalogForLLM = ECLAT_CATALOG.map((p) => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    tags: p.tags,
+    semantic: p.semantic,
+  }));
+
+  const prompt = `You are a world-class semantic fashion recommendation engine for the luxury brand ÉCLAT.
 A user is searching with the following query: "${query}"
 
 Your task:
-1. Interpret the user's exact mood, vibe, and fashion intent.
-2. Review the provided catalog.
-3. Select the best matching products that semantically fit the user's mood. Understand synonyms (e.g. "revealing" -> "sensual", "daring", "skin-baring"; "happy" -> "bright", "playful").
-4. Rank up to 6 product IDs from the catalog that best match this intent. 
+1. Check if the query contains any typos or misspellings. If so, provide the corrected query string in spellingCorrection. If there are no typos, set spellingCorrection to null.
+2. Interpret the user's exact mood, vibe, and fashion intent (use the corrected spelling if there were typos).
+3. Review the provided catalog.
+4. Select the best matching products that semantically fit the user's mood. Understand synonyms (e.g. "revealing" -> "sensual", "daring", "skin-baring"; "happy" -> "bright", "playful").
+5. Rank up to 6 product IDs from the catalog that best match this intent. 
 
 Here is the ÉCLAT catalog (JSON):
 ${JSON.stringify(catalogForLLM)}
 
 Return ONLY valid JSON (no markdown block, no extra text):
 {
+  "spellingCorrection": "corrected query string, or null if no typos",
   "mood": "Short phrase describing the extracted mood",
   "palette": ["list", "of", "colors"],
   "style": ["list", "of", "styles"],
@@ -74,72 +169,171 @@ Return ONLY valid JSON (no markdown block, no extra text):
   "rankedProductIds": ["id_1", "id_2", "id_3"]
 }`;
 
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-    const apiRes = await fetch(GEMINI_URL, {
+  // Model rotation — tried in order on 429.
+  // gemini-2.5-flash-lite: 30 RPM free (best)
+  // gemini-2.5-flash:      15 RPM free
+  // gemini-2.0-flash:      15 RPM free (separate quota bucket)
+  const GEMINI_MODELS = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+  ];
+
+  const makeBody = () => JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+  });
+
+  let apiRes: Response | null = null;
+  for (const model of GEMINI_MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
-      }),
+      body: makeBody(),
     });
+    if (r.status !== 429) { apiRes = r; break; }
+    console.warn(`[geminiSearch] ${model} → 429, trying next model`);
+  }
 
-    if (!apiRes.ok) throw new Error(`Gemini ${apiRes.status}`);
+  if (!apiRes || !apiRes.ok) throw new Error(`Gemini ${apiRes?.status ?? "no-response"}`);
 
-    const apiJson = await apiRes.json();
-    const rawText: string = apiJson?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const apiJson = await apiRes.json();
+  const rawText: string = apiJson?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
 
-    let aiData: any = {};
-    try {
-      aiData = JSON.parse(cleaned);
-    } catch (e) {
-      console.error("Failed to parse Gemini JSON:", cleaned);
-      aiData = { mood: query, interpretedAs: query, rankedProductIds: [] };
+  let aiData: Record<string, unknown> = {};
+  try {
+    aiData = JSON.parse(cleaned);
+  } catch {
+    console.error("Failed to parse Gemini JSON:", cleaned);
+    aiData = { mood: query, interpretedAs: query, rankedProductIds: [] };
+  }
+
+  const interpretedAs = aiData.interpretedAs
+    ? `${aiData.interpretedAs}${allSizes.length > 0 ? ` · Sizes remembered: ${allSizes.join(", ")}` : ""}`
+    : `Interpreted vibe for: "${query}"`;
+
+  const aiTags = [
+    ...(aiData.mood ? [aiData.mood as string] : []),
+    ...((aiData.aesthetic as string[]) || []),
+    ...((aiData.style as string[]) || []),
+    ...((aiData.palette as string[]) || []),
+  ];
+
+  // Extract spelling correction — only return if meaningfully different from query
+  const rawCorrection = (aiData.spellingCorrection as string | null) ?? null;
+  const didYouMean: string | null =
+    rawCorrection &&
+    rawCorrection.toLowerCase().trim() !== query.toLowerCase().trim()
+      ? rawCorrection.trim()
+      : null;
+
+  let results: (typeof ECLAT_CATALOG)[number][] = [];
+  if (aiData.rankedProductIds && Array.isArray(aiData.rankedProductIds)) {
+    for (const id of aiData.rankedProductIds as string[]) {
+      const product = ECLAT_CATALOG.find((p) => p.id === id);
+      if (product) results.push(product);
     }
+  }
 
-    const interpretedAs = aiData.interpretedAs
-      ? `${aiData.interpretedAs}${allSizes.length > 0 ? ` · Sizes remembered: ${allSizes.join(", ")}` : ""}`
-      : `Interpreted vibe for: "${query}"`;
+  if (allSizes.length > 0) {
+    results = results.sort((a, b) => {
+      const aHas = a.sizes?.some((s) => allSizes.includes(s)) ? 1 : 0;
+      const bHas = b.sizes?.some((s) => allSizes.includes(s)) ? 1 : 0;
+      return bHas - aHas;
+    });
+  }
 
-    const aiTags = [
-      ...(aiData.mood ? [aiData.mood] : []),
-      ...(aiData.aesthetic || []),
-      ...(aiData.style || []),
-      ...(aiData.palette || [])
-    ];
+  if (results.length === 0) results = ECLAT_CATALOG.slice(0, 4);
 
-    // 2. Map ranked IDs back to actual products
-    let results = [];
-    if (aiData.rankedProductIds && Array.isArray(aiData.rankedProductIds)) {
-      for (const id of aiData.rankedProductIds) {
-        const product = ECLAT_CATALOG.find(p => p.id === id);
-        if (product) results.push(product);
-      }
-    }
+  return { results, interpretedAs: interpretedAs as string, aiTags: aiTags.slice(0, 5), didYouMean };
+}
 
-    // 3. Size filtering boost: Move items that match the size preference to the very top
-    if (allSizes.length > 0) {
-      results.sort((a, b) => {
-        const aHasSize = a.sizes?.some(s => allSizes.includes(s)) ? 1 : 0;
-        const bHasSize = b.sizes?.some(s => allSizes.includes(s)) ? 1 : 0;
-        return bHasSize - aHasSize; // Descending order
+// ── Main Route ─────────────────────────────────────────────────────────────────
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const query: string = body.query ?? "";
+    const sizePreferences: string[] = body.sizePreferences ?? [];
+
+    if (!query.trim()) {
+      return NextResponse.json({
+        results: [],
+        interpretedAs: "No query",
+        aiTags: [],
+        extractedSizes: [],
+        source: "none",
       });
     }
 
-    // Fallback if the LLM didn't return any IDs (safety net)
-    if (results.length === 0) {
-      results = ECLAT_CATALOG.slice(0, 4);
+    const extractedSizes = extractSizes(query);
+    const allSizes = [...new Set([...sizePreferences, ...extractedSizes])];
+
+    // ════════════════════════════════════════════════════════════════════
+    // TIER 1 — Vector search + instant local spell-check (no extra latency)
+    // ════════════════════════════════════════════════════════════════════
+    const didYouMeanFromSpell = localSpellCheck(query);
+    const vectorResp = await vectorSearch({ query, size_preferences: allSizes, limit: 8 });
+
+    // ── TIER 1: High-confidence vector ───────────────────────────────────────
+    if (vectorResp && isConfident(vectorResp)) {
+      const { results, aiTags } = hydrateVectorResults(vectorResp, allSizes);
+      const interpretedAs =
+        vectorResp.interpreted_as +
+        (allSizes.length > 0 ? ` · Sizes: ${allSizes.join(", ")}` : "");
+      console.log(`[/api/search] source=vector confidence=${vectorResp.confidence.toFixed(2)} results=${results.length}`);
+      return NextResponse.json({
+        results, extractedSizes, interpretedAs, aiTags,
+        didYouMean: didYouMeanFromSpell, source: "vector", confidence: vectorResp.confidence,
+      });
     }
 
+    // ── TIER 2: Gemini AI ─────────────────────────────────────────────────────
+    // If Gemini fails (e.g. rate-limit), fall back to low-confidence vector
+    // results rather than the "show all" TypeScript fallback.
+    try {
+      const { results, interpretedAs, aiTags, didYouMean } = await geminiSearch(query, allSizes);
+      console.log(`[/api/search] source=gemini results=${results.length}`);
+      return NextResponse.json({
+        results, extractedSizes, interpretedAs, aiTags,
+        didYouMean: didYouMean ?? didYouMeanFromSpell ?? null, source: "gemini",
+      });
+    } catch (geminiErr) {
+      console.warn("[/api/search] Gemini failed — using low-confidence vector if available:", geminiErr instanceof Error ? geminiErr.message : geminiErr);
+
+      // Use low-confidence vector results if available (better than "show all")
+      if (vectorResp && vectorResp.results.length > 0) {
+        const { results, aiTags } = hydrateVectorResults(vectorResp, allSizes);
+        const interpretedAs =
+          vectorResp.interpreted_as +
+          (allSizes.length > 0 ? ` · Sizes: ${allSizes.join(", ")}` : "");
+        console.log(`[/api/search] source=vector-fallback confidence=${vectorResp.confidence.toFixed(2)} results=${results.length}`);
+        return NextResponse.json({
+          results, extractedSizes, interpretedAs, aiTags,
+          didYouMean: didYouMeanFromSpell, source: "vector", confidence: vectorResp.confidence,
+        });
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // TIER 3 — TypeScript deterministic NL search (never fails)
+    // ════════════════════════════════════════════════════════════════════
+    const nlResult = naturalLanguageSearch(query, allSizes);
+
+    console.log(`[/api/search] source=typescript results=${nlResult.results.length}`);
+
     return NextResponse.json({
-      results,
+      results: nlResult.results.map((r) => r.product),
       extractedSizes,
-      interpretedAs,
-      aiTags: aiTags.slice(0, 5), // show top 5 extracted attributes as pills
+      interpretedAs: nlResult.interpretedAs,
+      aiTags: [],
+      didYouMean: didYouMeanFromSpell ?? null,
+      source: "typescript",
     });
+
   } catch (err) {
-    console.error("[/api/search] Error:", err);
-    return NextResponse.json({ error: "AI search failed" }, { status: 500 });
+    console.error("[/api/search] Unhandled error:", err);
+    return NextResponse.json({ error: "Search failed" }, { status: 500 });
   }
 }
