@@ -103,6 +103,30 @@ const SEMANTIC_MAP: Record<string, string[]> = {
   crisp:        ["minimal", "structured", "separates"],
   fresh:        ["minimal", "everyday", "separates"],
   chill:        ["minimal", "casual", "separates"],
+
+  // Coverage / layering intent
+  cover:        ["outerwear", "sets"],
+  covering:     ["outerwear", "sets"],
+  covered:      ["outerwear", "sets"],
+  coverage:     ["outerwear", "sets"],
+  layer:        ["outerwear", "sets"],
+  layered:      ["sets", "outerwear"],
+
+  // Flashy / understated antonym pair
+  // Map "flashy" so we can NEGATE it ("not so flashy" → exclude statement/sequin)
+  flashy:       ["statement", "evening", "party", "bold"],
+  shiny:        ["statement", "evening", "party"],
+  sparkly:      ["statement", "evening", "party"],
+  glittery:     ["statement", "evening", "party"],
+  revealing:    ["evening", "night", "sexy", "sensual"],
+
+  // Understated / minimal opposites
+  understated:  ["minimal", "everyday", "cotton"],
+  simple:       ["minimal", "everyday", "cotton"],
+  quiet:        ["minimal", "everyday"],
+  subtle:       ["minimal", "everyday", "silk"],
+  toned:        ["minimal", "structured"],
+  muted:        ["minimal", "everyday"],
 };
 
 // ─── Sizes to detect ─────────────────────────────────────────────────────────
@@ -148,28 +172,46 @@ export function naturalLanguageSearch(
   }
   const allKnownSizes = [...new Set([...rememberedSizes, ...extractedSizes])];
 
-  // ── 2. Map query words to semantic tags ────────────────────────────────────
+  // ── 2. Parse query for negation and positive visual keywords ────────────────────
   const tagScores: Record<string, number> = {};
   const interpretedWords: string[] = [];
 
-  // Detect if "cold" / "warm" are used as AESTHETIC intent
-  // ("feel cold", "look warm", "want to be warm") vs weather intent
-  // ("coat for the cold", "cold weather", "it's cold outside")
+  // Detect negation patterns before processing keywords
+  // Patterns: "no [word]", "not [word]", "not so [word]", "without [word]", "don't want [word]"
+  const negatedWords = new Set<string>();
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (w === 'no' || w === 'not' || w === 'without' || w === 'dont' || w === 'avoid') {
+      // "not so X" → negate X
+      if (words[i + 1] === 'so' || words[i + 1] === 'too' || words[i + 1] === 'that') {
+        if (words[i + 2]) negatedWords.add(words[i + 2]);
+      } else if (words[i + 1]) {
+        negatedWords.add(words[i + 1]);
+        // Also catch "not a [word]" or "no [word]s"
+        if (words[i + 2] && !['a','an','the','i','to','and'].includes(words[i + 2])) {
+          negatedWords.add(words[i + 2].replace(/s$/, '')); // de-pluralise
+        }
+      }
+    }
+  }
+
+  // Detect aesthetic vs weather intent for cold/warm
   const aestheticModifiers = /\b(feel|feeling|look|looking|seem|vibe|aesthetic|appear|want to be|want to feel)\b/;
   const weatherModifiers   = /\b(weather|outside|for the|coat|jacket|outerwear|winter|season|temperature)\b/;
   const isAestheticCold = aestheticModifiers.test(lower) && !weatherModifiers.test(lower);
 
   for (const word of words) {
+    // Skip negated words — handled separately below
+    if (negatedWords.has(word)) continue;
+
     // Skip "cold" / "warm" when used aesthetically — map to cool/sleek instead
     if ((word === "cold" || word === "warm") && isAestheticCold) {
-      // "feel cold" → sleek, minimal, cool silhouette, not winter coat
       if (word === "cold") {
         interpretedWords.push(word);
         for (const tag of ["minimal", "structured", "separates", "silk"]) {
           tagScores[tag] = (tagScores[tag] ?? 0) + 1;
         }
       }
-      // "feel warm" → cosy but fashion-forward: evening, silk, luxury
       if (word === "warm") {
         interpretedWords.push(word);
         for (const tag of ["silk", "luxury", "evening", "separates"]) {
@@ -188,10 +230,72 @@ export function naturalLanguageSearch(
     }
   }
 
-  // ── 3. Score each ÉCLAT product ───────────────────────────────────────────
+  // For negated words: if they map to a semantic antonym, ADD those instead
+  // e.g. "not flashy" → negates [statement,evening,party] → boosts [minimal,everyday]
+  const ANTONYMS: Record<string, string[]> = {
+    flashy:    ["minimal", "everyday", "cotton"],
+    shiny:     ["minimal", "everyday"],
+    sparkly:   ["minimal", "everyday"],
+    revealing: ["outerwear", "sets", "minimal"],
+    crop:      ["outerwear", "sets", "silk"],
+    tight:     ["minimal", "relaxed", "everyday"],
+    formal:    ["minimal", "everyday", "casual"],
+    casual:    ["formal", "evening", "luxury"],
+    dark:      ["minimal", "silk", "everyday"],
+    heavy:     ["silk", "minimal", "separates"],
+  };
+
+  // Collect negated tags (to exclude products) and positive antonym tags (to boost)
+  const excludedTags = new Set<string>();
+  for (const negWord of negatedWords) {
+    const negatableTags = SEMANTIC_MAP[negWord];
+    if (negatableTags) {
+      for (const t of negatableTags) excludedTags.add(t);
+    }
+    const antonymTags = ANTONYMS[negWord];
+    if (antonymTags) {
+      interpretedWords.push(`not ${negWord}`);
+      for (const t of antonymTags) tagScores[t] = (tagScores[t] ?? 0) + 2;
+    }
+  }
+
+  // Visual negation: words that should exclude based on visualDescription text
+  // e.g. "no crop" → exclude products whose visualDescription contains "crop"
+  const visualExcludeTerms: string[] = [];
+  const visualRequireTerms: string[] = [];
+  for (const negWord of negatedWords) {
+    if (['crop', 'sleeve', 'mini', 'maxi', 'sheer', 'mesh'].includes(negWord)) {
+      visualExcludeTerms.push(negWord);
+    }
+  }
+  // Positive visual requirements: "sleeve" in query (not negated) → require sleeves
+  if (words.includes('sleeve') && !negatedWords.has('sleeve')) visualRequireTerms.push('sleeve');
+  if (words.includes('sleeved') && !negatedWords.has('sleeved')) visualRequireTerms.push('sleeve');
+  if (words.includes('sleeveless')) visualRequireTerms.push('sleeveless');
+
+
+  // ── 3. Score each ÉCLAT product ───────────────────────────────────────
   const scored: SearchResult[] = ECLAT_CATALOG.map((product) => {
     const matchedTags: string[] = [];
     let rawScore = 0;
+
+    // Skip products that have excluded tags (negation)
+    const hasExcludedTag = product.tags.some(t => excludedTags.has(t));
+
+    // Visual exclusion: skip products whose visualDescription contains negated visual terms
+    const vd = (product.visualDescription ?? "").toLowerCase();
+    const failsVisualExclude = visualExcludeTerms.some(term => vd.includes(term));
+
+    // Visual requirement: if user wants sleeves, require visualDescription to mention sleeves
+    const failsVisualRequire = visualRequireTerms.some(term => {
+      if (term === 'sleeve') return !(vd.includes('sleeve') && !vd.includes('sleeveless') && !vd.includes('no sleeve'));
+      if (term === 'sleeveless') return !vd.includes('sleeveless') && !vd.includes('no sleeve');
+      return false;
+    });
+
+    if (hasExcludedTag || failsVisualExclude || failsVisualRequire) {
+      return { product, score: 0, matchedTags: [], sizeMatch: false };
+    }
 
     for (const tag of product.tags) {
       const tagScore = tagScores[tag] ?? 0;

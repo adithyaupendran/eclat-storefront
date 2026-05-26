@@ -183,11 +183,19 @@ async function geminiSearch(
 A user is searching with the following query: "${query}"
 
 Your task:
-1. Translate pop culture references, celebrity icons, or abstract concepts into concrete fashion attributes (e.g., "Matrix" → "minimalist, black, structured, leather"; "90s supermodel" → "slip dress, minimalism, elegant").
-2. Check if the query contains any typos. If so, provide the corrected query string.
-3. Review the provided catalog. Each product has a "visualDescription" field — this is the primary source of truth for visual attributes like sleeves, neckline, silhouette, colour, and material.
-4. Select the best matching products that semantically AND visually fit the user's intent.
-5. Rank up to 6 product IDs from the catalog.
+1. If the query references a celebrity, icon, film, or culture (e.g. "Michael Jackson", "Matrix", "Audrey Hepburn", "Y2K"), translate it into concrete fashion attributes FIRST before matching products.
+2. Handle NEGATION strictly. Words like "no", "not", "without", "not so" mean EXCLUDE. Critical examples:
+   - "no crop top" → EXCLUDE products whose visualDescription says "crop" — show full-coverage tops, blouses, coats instead
+   - "not so flashy" → EXCLUDE sequin/statement/party pieces; return minimal, architectural, understated pieces ONLY
+   - "no sleeves" → EXCLUDE products with sleeves; prefer sleeveless items
+   - "i want to cover" / "cover myself" → EXCLUDE crop tops and revealing items; prefer coats, long blouses, full-coverage pieces
+3. Use the "visualDescription" field as PRIMARY TRUTH for visual attributes — the product name may be misleading, trust the visual description:
+   - "with sleeves" / "sleeved" → ONLY match products where visualDescription mentions sleeves AND does NOT say sleeveless
+   - "sleeveless" → ONLY match products where visualDescription says sleeveless or no sleeves
+   - "crop top" → match products where visualDescription says crop
+4. Understand fashion synonyms (e.g. "revealing" → sensual/skin-baring; "covered" → outerwear/full-coverage).
+5. ALWAYS return at least 3–4 products in rankedProductIds — never return an empty array.
+6. Fix typos and provide spellingCorrection (null if no typos).
 
 Here is the ÉCLAT catalog (JSON):
 ${JSON.stringify(allProductsForLLM)}
