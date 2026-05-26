@@ -27,6 +27,14 @@ export interface Product {
   sizes?: string[];  // e.g. ['XS','S','M','L','XL'] or ['ONE SIZE']
   /** CSS object-position value for the product card image crop, e.g. 'top', 'center', '50% 20%' */
   imagePosition?: string;
+  /**
+   * Visual description derived from the actual product image — written once at
+   * development time (like the Python backend's seed_chroma.py). Never sent
+   * as an image at search time; just plain text baked into the catalog.
+   * Used by the Gemini search prompt for accurate visual attribute matching
+   * (e.g. sleeves, neckline, silhouette, colour, material).
+   */
+  visualDescription?: string;
   /** Semantic mood/vibe metadata used for semantic AI recommendation */
   semantic?: {
     style: string[];
@@ -201,6 +209,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Washed charcoal canvas, large-format samurai print bleeding into fabric. Leather belt tie, quilted lining. Dark, archival, singular.",
     tags: ["rain", "cold", "structured", "wool", "winter", "outerwear", "statement", "gothic", "dark", "moody", "dramatic", "archival", "editorial", "avant-garde", "bold", "graphic", "artistic", "dark-academia"],
     sizes: ["S", "M", "L", "XL"],
+    visualDescription: "long coat with long sleeves, notched lapel collar, belted waist tie, mid-calf length, charcoal grey canvas, large samurai graphic print on lower half, quilted lining visible at chest, patch pockets",
     stock: 8,
     rating: 4.9,
     reviewCount: 47,
@@ -223,6 +232,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Floor-length double-breasted black wool. Six-button closure, extreme elongated silhouette. The coat as architecture.",
     tags: ["rain", "cold", "wool", "winter", "outerwear", "luxury", "gothic", "dark", "dramatic", "architectural", "sculptural", "structured", "statement", "minimal", "elongated", "editorial", "bold", "elegant"],
     sizes: ["XS", "S", "M", "L"],
+    visualDescription: "floor-length greatcoat with long sleeves, high structured collar, double-breasted button closure, belted waist, extremely elongated silhouette, deep black wool, wide structured shoulders",
     imagePosition: "50% 20%",
     stock: 5,
     rating: 5.0,
@@ -246,6 +256,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Oversized stone-camel canvas trench. Extreme volume, notched collar, front slit, belted cuffs. Parisian in weight, modern in scale.",
     tags: ["rain", "structured", "outerwear", "archival", "classic", "camel", "neutral", "everyday", "casual", "parisian", "oversized", "minimal", "timeless", "editorial", "relaxed", "effortless"],
     sizes: ["S", "M", "L", "XL"],
+    visualDescription: "mid-length trench coat with long sleeves, notched lapel collar, button-front closure, belted cuffs, patch pockets, open front, stone camel beige colour, plaid lining visible, oversized relaxed fit",
     stock: 3,
     rating: 4.8,
     reviewCount: 18,
@@ -268,6 +279,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Sculptural deconstructed one-shoulder silhouette. Wrapped torso, cascading fabric strips at hem. Avant-garde structure as statement.",
     tags: ["evening", "night", "formal", "statement", "structured", "sculptural", "architectural", "avant-garde", "dramatic", "editorial", "bold", "party", "separates", "sexy", "sensual", "date", "luxury"],
     sizes: ["XS", "S", "M", "L", "XL"],
+    visualDescription: "sleeveless crop top, no sleeves, spaghetti straps with one floral-ruffle embellished strap on right shoulder, V-neckline, fitted bodice, iridescent holographic sequin fabric, rose gold and pink tones, cropped length",
     imagePosition: "center",
     stock: 14,
     rating: 4.6,
@@ -291,6 +303,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Black satin cowl-neck, deep draped décolletage, pointed collar, bishop sleeves with cuffed wrists. Fluid luxury for evenings that command attention.",
     tags: ["silk", "evening", "night", "separates", "luxury", "romantic", "sexy", "sensual", "fluid", "elegant", "formal", "date", "glamorous", "seductive", "draped", "statement", "feminine"],
     sizes: ["XS", "S", "M", "L"],
+    visualDescription: "sleeveless bustier crop top, no sleeves, thick wide straps over shoulders, sweetheart neckline, fitted structured bodice, black fabric with intricate gold beaded and sequin embroidery in sunburst and feather motifs, crystal embellishments, cropped above waist",
     imagePosition: "center",
     stock: 11,
     rating: 4.9,
@@ -314,6 +327,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Charcoal grey wide-leg with heavy sculptural diagonal pleating. Structural crease lines as design — streetwear silhouette, avant-garde construction.",
     tags: ["minimal", "wfh", "separates", "cotton", "everyday", "architectural", "structured", "avant-garde", "editorial", "dark", "moody", "streetwear", "bold", "dramatic", "gothic", "grey", "relaxed"],
     sizes: ["XS", "S", "M", "L", "XL"],
+    visualDescription: "wide-leg trousers, no sleeves, high-waisted with broad structured waistband, four-button closure at centre front, heavy front pleating, full-length leg, jet black fabric, no leg openings visible, bottom garment only",
     imagePosition: "bottom",
     stock: 19,
     rating: 4.7,
@@ -337,6 +351,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Sculptural floating wedge, heel cantilevered in space. Spiral leather straps wrap the shin. Large silver oval hardware at toe. Architecture you walk in.",
     tags: ["evening", "night", "formal", "statement", "footwear", "luxury", "gothic", "dark", "architectural", "sculptural", "avant-garde", "dramatic", "bold", "editorial", "platform", "sexy", "party"],
     sizes: ["36", "37", "38", "39", "40", "41"],
+    visualDescription: "knee-high cowboy-style boots, no sleeves, block heel, pointed toe, deep burgundy red leather, intricate gold geometric and floral embroidery inlays, long fringe trim cascading from shaft, western-inspired boot silhouette",
     imagePosition: "bottom",
     stock: 7,
     rating: 4.8,
@@ -360,6 +375,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Fine black silk waistcoat, embroidered lace-up patchwork construction, sleeveless. A structured layer that speaks before you do.",
     tags: ["evening", "night", "formal", "statement", "separates", "luxury", "gothic", "dark", "dramatic", "editorial", "embroidered", "structured", "bold", "sexy", "sensual", "artistic", "unique"],
     sizes: ["ONE SIZE"],
+    visualDescription: "sleeveless waistcoat blazer vest, no sleeves, deep V-neckline with wide lapels, open front with bow tie belt at waist, structured shoulders with cap-sleeve silhouette, jet black fabric, fitted peplum-style cut",
     imagePosition: "center",
     stock: 9,
     rating: 4.9,
@@ -383,6 +399,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "The dress that earns a cover. Draped construction, editorial presence — for the woman who doesn't wait to be seen.",
     tags: ["evening", "night", "separates", "luxury", "formal", "statement", "romantic", "elegant", "sexy", "sensual", "draped", "editorial", "glamorous", "party", "seductive", "bold", "feminine", "confident"],
     sizes: ["ONE SIZE"],
+    visualDescription: "sleeveless slip dress, no sleeves, thin chain or embellished shoulder strap on one side, deep V or scoop neckline, draped fluid silhouette, black satin or silk fabric, midi to floor length, figure skimming cut",
     stock: 6,
     rating: 5.0,
     reviewCount: 29,
@@ -405,6 +422,7 @@ export const PRODUCT_CATALOG: Product[] = [
       "Asymmetric wrap mini skirt layered over wide-leg tailored trousers. Grey-on-grey architectural proportions. One set, two readings.",
     tags: ["minimal", "wfh", "sets", "value", "everyday", "separates", "architectural", "avant-garde", "structured", "grey", "neutral", "monochrome", "editorial", "layering", "artistic", "casual", "relaxed"],
     sizes: ["XS", "S", "M", "L", "XL"],
+    visualDescription: "sleeveless structured bolero jacket or avant-garde shoulder piece, no traditional sleeves, asymmetric dramatic sculptural shoulders with spikes, black leather with silver chain draping, open front with zip detail, worn over bare torso, punk-meets-couture silhouette",
     imagePosition: "50% 30%",
     stock: 12,
     rating: 4.8,

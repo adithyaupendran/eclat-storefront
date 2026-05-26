@@ -5,6 +5,54 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/admin'
 
+/**
+ * Calls Gemini Vision on the first image URL of a product to generate a
+ * plain-text visual description. Called ONCE at product create/update time
+ * and stored in the DB — never called at search time.
+ *
+ * Mirrors the Python backend's seed_chroma.py approach: analyse once,
+ * store permanently, search against text only.
+ */
+async function generateVisualDescription(imageUrls: string[]): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey || imageUrls.length === 0) return null
+
+  // Use the first image URL. Works with Supabase Storage URLs, CDN URLs, etc.
+  const imageUrl = imageUrls[0]
+
+  const prompt = `You are a fashion visual analyst. Look at this product image and describe EXACTLY what you see as a garment in one concise sentence covering: garment type, whether it has sleeves (yes/no), sleeve type if applicable, neckline, silhouette, primary colour, and up to 3 key visual details. Return ONLY the description sentence, no extra text.`
+
+  try {
+    const body = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { file_data: { mime_type: 'image/jpeg', file_uri: imageUrl } }
+        ]
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 200 }
+    }
+
+    // Try with file_data (URL-based, no base64 needed for public URLs)
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    )
+
+    if (!res.ok) {
+      console.warn(`[generateVisualDescription] Gemini returned ${res.status} — skipping visual description`)
+      return null
+    }
+
+    const json = await res.json()
+    const text: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    return text.trim() || null
+  } catch (err) {
+    console.warn('[generateVisualDescription] Failed:', err)
+    return null
+  }
+}
+
 const ProductSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -46,10 +94,14 @@ export async function createProduct(formData: FormData) {
   const { id, image_urls, ...rest } = parsed.data
   const slug = id
 
+  // Generate visual description from the first image — once, at save time
+  const visual_description = await generateVisualDescription(image_urls)
+
   const { error } = await admin.from('products').insert({
     id,
     slug,
     image_urls,
+    visual_description,
     ...rest,
   })
 
@@ -72,9 +124,12 @@ export async function updateProduct(id: string, formData: FormData) {
 
   const { image_urls, ...rest } = parsed.data
 
+  // Regenerate visual description when images are updated
+  const visual_description = await generateVisualDescription(image_urls)
+
   const { error } = await admin
     .from('products')
-    .update({ image_urls, ...rest })
+    .update({ image_urls, visual_description, ...rest })
     .eq('id', id)
 
   if (error) return { error: error.message }

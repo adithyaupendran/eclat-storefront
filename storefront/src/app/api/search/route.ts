@@ -15,6 +15,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { ECLAT_CATALOG } from "@/lib/mock/catalog";
 import { naturalLanguageSearch } from "@/lib/search";
 import { vectorSearch, isConfident, type VectorSearchResponse } from "@/lib/vectorSearch";
+import { createAdminClient } from "@/lib/supabase/server";
+
+// ── Fetch live products from Supabase (admin-added products) ──────────────────
+// Returns products with their pre-generated visual_description.
+// Falls back to empty array silently if DB is unavailable.
+async function fetchDbProducts(): Promise<{ id: string; title: string; category: string; tags: string[]; visual_description: string | null; image_urls: string[]; sizes: string[]; stock_quantity: number; rating: number; review_count: number; price: number; original_price: number | null }[]> {
+  try {
+    const admin = await createAdminClient();
+    const { data } = await admin
+      .from("products")
+      .select("id, title, category, tags, visual_description, image_urls, sizes, stock_quantity, rating, review_count, price, original_price")
+      .gt("stock_quantity", 0);
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
 
 // ── Size extraction helper (unchanged from original) ──────────────────────────
 const SIZE_PATTERNS: { pattern: RegExp; size: string }[] = [
@@ -132,18 +149,35 @@ function localSpellCheck(query: string): string | null {
 }
 
 
-// ── Gemini search (original logic, unchanged) ─────────────────────────────────
+// ── Gemini search ──────────────────────────────────────────────────────────────
 async function geminiSearch(
   query: string,
   allSizes: string[]
 ): Promise<{ results: (typeof ECLAT_CATALOG)[number][]; interpretedAs: string; aiTags: string[]; didYouMean: string | null }> {
-  const catalogForLLM = ECLAT_CATALOG.map((p) => ({
+
+  // Merge static catalog + live Supabase products into one list for Gemini
+  const dbProducts = await fetchDbProducts();
+
+  // Map static catalog products — include visualDescription for accurate visual matching
+  const staticForLLM = ECLAT_CATALOG.map((p) => ({
     id: p.id,
     name: p.name,
     category: p.category,
     tags: p.tags,
     semantic: p.semantic,
+    visualDescription: p.visualDescription ?? null,
   }));
+
+  // Map DB products — include visual_description generated at save time
+  const dbForLLM = dbProducts.map((p) => ({
+    id: p.id,
+    name: p.title,
+    category: p.category,
+    tags: p.tags ?? [],
+    visualDescription: p.visual_description ?? null,
+  }));
+
+  const allProductsForLLM = [...staticForLLM, ...dbForLLM];
 
   const prompt = `You are a world-class semantic fashion recommendation engine for the luxury brand ÉCLAT.
 A user is searching with the following query: "${query}"
@@ -151,12 +185,16 @@ A user is searching with the following query: "${query}"
 Your task:
 1. Check if the query contains any typos or misspellings. If so, provide the corrected query string in spellingCorrection. If there are no typos, set spellingCorrection to null.
 2. Interpret the user's exact mood, vibe, and fashion intent (use the corrected spelling if there were typos).
-3. Review the provided catalog.
-4. Select the best matching products that semantically fit the user's mood. Understand synonyms (e.g. "revealing" -> "sensual", "daring", "skin-baring"; "happy" -> "bright", "playful").
-5. Rank up to 6 product IDs from the catalog that best match this intent. 
+3. Review the provided catalog. Each product has an optional "visualDescription" field — this is what the product ACTUALLY LOOKS LIKE based on image analysis. Use it as the primary source of truth for visual attributes like sleeves, neckline, silhouette, colour, and material.
+4. Select the best matching products that semantically AND visually fit the user's intent. For example:
+   - "sleeved" or "with sleeves" → only match products whose visualDescription mentions sleeves (long, short, bishop, etc.)
+   - "sleeveless" or "no sleeves" → only match products whose visualDescription says sleeveless/no sleeves
+   - "cowl neck" → match visualDescription mentioning cowl neckline
+   - Understand synonyms (e.g. "revealing" → "sensual", "daring"; "happy" → "bright", "playful")
+5. Rank up to 6 product IDs from the catalog that best match this intent.
 
 Here is the ÉCLAT catalog (JSON):
-${JSON.stringify(catalogForLLM)}
+${JSON.stringify(allProductsForLLM)}
 
 Return ONLY valid JSON (no markdown block, no extra text):
 {
@@ -229,11 +267,35 @@ Return ONLY valid JSON (no markdown block, no extra text):
       ? rawCorrection.trim()
       : null;
 
+  // Hydrate results: check static catalog first, then DB products
   let results: (typeof ECLAT_CATALOG)[number][] = [];
   if (aiData.rankedProductIds && Array.isArray(aiData.rankedProductIds)) {
     for (const id of aiData.rankedProductIds as string[]) {
-      const product = ECLAT_CATALOG.find((p) => p.id === id);
-      if (product) results.push(product);
+      // Try static catalog first
+      const staticProduct = ECLAT_CATALOG.find((p) => p.id === id);
+      if (staticProduct) { results.push(staticProduct); continue; }
+
+      // Fall back to DB product — adapt to Product shape for rendering
+      const dbProduct = dbProducts.find((p) => p.id === id);
+      if (dbProduct) {
+        results.push({
+          id: dbProduct.id,
+          name: dbProduct.title,
+          brand: "ÉCLAT",
+          category: dbProduct.category,
+          priceINR: dbProduct.price,
+          originalPriceINR: dbProduct.original_price ?? null,
+          imageUrl: dbProduct.image_urls[0] ?? "",
+          imageUrls: dbProduct.image_urls,
+          shortDescription: "",
+          tags: dbProduct.tags ?? [],
+          sizes: dbProduct.sizes ?? [],
+          stock: dbProduct.stock_quantity,
+          rating: dbProduct.rating ?? 0,
+          reviewCount: dbProduct.review_count ?? 0,
+          visualDescription: dbProduct.visual_description ?? undefined,
+        });
+      }
     }
   }
 
