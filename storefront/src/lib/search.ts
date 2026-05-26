@@ -114,7 +114,7 @@ const SEMANTIC_MAP: Record<string, string[]> = {
 
   // Flashy / understated antonym pair
   // Map "flashy" so we can NEGATE it ("not so flashy" → exclude statement/sequin)
-  flashy:       ["statement", "evening", "party", "bold"],
+  flashy:       ["statement", "evening", "party"],
   shiny:        ["statement", "evening", "party"],
   sparkly:      ["statement", "evening", "party"],
   glittery:     ["statement", "evening", "party"],
