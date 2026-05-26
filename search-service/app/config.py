@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Server
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 7860
 
     # Search quality
     confidence_threshold: float = 0.40

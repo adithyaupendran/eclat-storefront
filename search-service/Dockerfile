@@ -17,6 +17,6 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 # (data baked into image — survives restarts, resets on redeploy)
 RUN python scripts/seed_chroma.py --source catalog --wipe
 
-EXPOSE 8000
+EXPOSE 7860
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
