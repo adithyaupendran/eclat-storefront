@@ -183,15 +183,11 @@ async function geminiSearch(
 A user is searching with the following query: "${query}"
 
 Your task:
-1. Check if the query contains any typos or misspellings. If so, provide the corrected query string in spellingCorrection. If there are no typos, set spellingCorrection to null.
-2. Interpret the user's exact mood, vibe, and fashion intent (use the corrected spelling if there were typos).
-3. Review the provided catalog. Each product has an optional "visualDescription" field — this is what the product ACTUALLY LOOKS LIKE based on image analysis. Use it as the primary source of truth for visual attributes like sleeves, neckline, silhouette, colour, and material.
-4. Select the best matching products that semantically AND visually fit the user's intent. For example:
-   - "sleeved" or "with sleeves" → only match products whose visualDescription mentions sleeves (long, short, bishop, etc.)
-   - "sleeveless" or "no sleeves" → only match products whose visualDescription says sleeveless/no sleeves
-   - "cowl neck" → match visualDescription mentioning cowl neckline
-   - Understand synonyms (e.g. "revealing" → "sensual", "daring"; "happy" → "bright", "playful")
-5. Rank up to 6 product IDs from the catalog that best match this intent.
+1. Translate pop culture references, celebrity icons, or abstract concepts into concrete fashion attributes (e.g., "Matrix" → "minimalist, black, structured, leather"; "90s supermodel" → "slip dress, minimalism, elegant").
+2. Check if the query contains any typos. If so, provide the corrected query string.
+3. Review the provided catalog. Each product has a "visualDescription" field — this is the primary source of truth for visual attributes like sleeves, neckline, silhouette, colour, and material.
+4. Select the best matching products that semantically AND visually fit the user's intent.
+5. Rank up to 6 product IDs from the catalog.
 
 Here is the ÉCLAT catalog (JSON):
 ${JSON.stringify(allProductsForLLM)}
@@ -382,13 +378,22 @@ export async function POST(req: NextRequest) {
     // TIER 3 — TypeScript deterministic NL search (never fails)
     // ════════════════════════════════════════════════════════════════════
     const nlResult = naturalLanguageSearch(query, allSizes);
+    const nlProducts = nlResult.results.map((r) => r.product);
 
-    console.log(`[/api/search] source=typescript results=${nlResult.results.length}`);
+    // Safety net: if the TS search also returns nothing (e.g. highly abstract
+    // query like "something michael jackson would wear"), show top catalog items
+    // so the user always sees products rather than an empty state.
+    const finalProducts = nlProducts.length > 0 ? nlProducts : ECLAT_CATALOG.slice(0, 4);
+    const finalInterpretedAs = nlProducts.length > 0
+      ? nlResult.interpretedAs
+      : `Showing featured pieces — try a more specific query like "dark structured coat" or "sleeveless evening top".`;
+
+    console.log(`[/api/search] source=typescript results=${finalProducts.length}`);
 
     return NextResponse.json({
-      results: nlResult.results.map((r) => r.product),
+      results: finalProducts,
       extractedSizes,
-      interpretedAs: nlResult.interpretedAs,
+      interpretedAs: finalInterpretedAs,
       aiTags: [],
       didYouMean: didYouMeanFromSpell ?? null,
       source: "typescript",
