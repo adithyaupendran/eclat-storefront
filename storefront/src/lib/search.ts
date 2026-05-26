@@ -24,7 +24,7 @@ import { ECLAT_CATALOG, type Product } from "@/lib/mock/catalog";
 // ─── Semantic tag map: mood/attribute → product tags ─────────────────────────
 const SEMANTIC_MAP: Record<string, string[]> = {
   // Moods & aesthetics
-  gothic:       ["structured", "statement", "outerwear", "accessories", "outerwear"],
+  gothic:       ["structured", "statement", "outerwear", "accessories"],
   dark:         ["structured", "statement", "outerwear", "accessories"],
   moody:        ["structured", "statement", "outerwear"],
   dramatic:     ["structured", "statement", "outerwear", "footwear"],
@@ -54,8 +54,10 @@ const SEMANTIC_MAP: Record<string, string[]> = {
   travel:       ["everyday", "minimal", "sets"],
   winter:       ["winter", "wool", "outerwear", "cold"],
   rain:         ["rain", "cold", "outerwear"],
-  cold:         ["cold", "winter", "wool", "outerwear"],
-  warm:         ["winter", "wool", "outerwear"],
+  // NOTE: "cold" and "warm" are intentionally OMITTED here.
+  // They are context-sensitive: as weather words they map to outerwear,
+  // but as aesthetic words ("want to feel cold", "look warm") they should not.
+  // They are handled dynamically in naturalLanguageSearch() below.
 
   // Garment types
   coat:         ["outerwear"],
@@ -94,6 +96,13 @@ const SEMANTIC_MAP: Record<string, string[]> = {
   fitted:       ["separates", "structured"],
   layering:     ["sets", "everyday"],
   monochrome:   ["minimal", "structured"],
+
+  // Cool/icy/fresh aesthetic — NOT outerwear, but sleek minimal looks
+  cool:         ["minimal", "structured", "separates"],
+  icy:          ["minimal", "silk", "separates"],
+  crisp:        ["minimal", "structured", "separates"],
+  fresh:        ["minimal", "everyday", "separates"],
+  chill:        ["minimal", "casual", "separates"],
 };
 
 // ─── Sizes to detect ─────────────────────────────────────────────────────────
@@ -143,7 +152,33 @@ export function naturalLanguageSearch(
   const tagScores: Record<string, number> = {};
   const interpretedWords: string[] = [];
 
+  // Detect if "cold" / "warm" are used as AESTHETIC intent
+  // ("feel cold", "look warm", "want to be warm") vs weather intent
+  // ("coat for the cold", "cold weather", "it's cold outside")
+  const aestheticModifiers = /\b(feel|feeling|look|looking|seem|vibe|aesthetic|appear|want to be|want to feel)\b/;
+  const weatherModifiers   = /\b(weather|outside|for the|coat|jacket|outerwear|winter|season|temperature)\b/;
+  const isAestheticCold = aestheticModifiers.test(lower) && !weatherModifiers.test(lower);
+
   for (const word of words) {
+    // Skip "cold" / "warm" when used aesthetically — map to cool/sleek instead
+    if ((word === "cold" || word === "warm") && isAestheticCold) {
+      // "feel cold" → sleek, minimal, cool silhouette, not winter coat
+      if (word === "cold") {
+        interpretedWords.push(word);
+        for (const tag of ["minimal", "structured", "separates", "silk"]) {
+          tagScores[tag] = (tagScores[tag] ?? 0) + 1;
+        }
+      }
+      // "feel warm" → cosy but fashion-forward: evening, silk, luxury
+      if (word === "warm") {
+        interpretedWords.push(word);
+        for (const tag of ["silk", "luxury", "evening", "separates"]) {
+          tagScores[tag] = (tagScores[tag] ?? 0) + 1;
+        }
+      }
+      continue;
+    }
+
     const tags = SEMANTIC_MAP[word];
     if (tags) {
       interpretedWords.push(word);
